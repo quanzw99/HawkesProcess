@@ -1,0 +1,6 @@
+{
+  "dblp": {
+    "edges"  : "./dataset/dblp/dblp.txt",
+    "labels" : "./dataset/dblp/nid2label.txt"
+  }
+}

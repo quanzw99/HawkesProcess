@@ -1,3 +1,5 @@
+import json
+
 import torch
 from HTNEDataSet import HTNEDataSet
 from torch.autograd import Variable
@@ -13,9 +15,15 @@ FType = torch.FloatTensor
 LType = torch.LongTensor
 torch.set_num_threads(1)
 
-class HTNE_a:
-    def __init__(self, file_path, emb_size=128, neg_size=5, hist_len=5, directed=False,
-                 learning_rate=0.01, batch_size=1000, save_step=50, epoch_num=20):
+class HP:
+    def __init__(self, data_name, emb_size=128, neg_size=5, hist_len=5, directed=False,
+                 learning_rate=0.01, batch_size=1000, save_step=50, epoch_num=20,
+                 model_name='htne', optim='SGD'):
+
+        file_path = self.get_dataset(data_name)['edges']
+        self.save_file = data_name + '_' + model_name + '_%d.emb'
+        self.model_name = model_name
+
         self.emb_size = emb_size
         self.neg_size = neg_size
         self.hist_len = hist_len
@@ -38,8 +46,17 @@ class HTNE_a:
 
         self.delta = Variable((torch.zeros(self.node_dim) + 1.).type(FType), requires_grad=True)
 
-        self.opt = SGD(lr=learning_rate, params=[self.node_emb, self.delta])
+        if optim == 'SGD':
+            self.opt = SGD(lr=learning_rate, params=[self.node_emb, self.delta])
+        elif optim == 'Adam':
+            self.opt = Adam(lr=learning_rate, params=[self.node_emb, self.delta])
+
         self.loss = torch.FloatTensor()
+
+    def get_dataset(self, data_name):
+        with open('./dataset.json', 'r') as dataset_file:
+            dataset_data = json.load(dataset_file)
+        return dataset_data[data_name]
 
     def forward(self, s_nodes, t_nodes, t_times, n_nodes, h_nodes, h_times, h_time_mask):
         # the size of the current batch
@@ -67,11 +84,28 @@ class HTNE_a:
             Variable(h_time_mask).unsqueeze(2))).sum(dim=1)
         return p_lambda, n_lambda
 
-    def loss_func(self, s_nodes, t_nodes, t_times, n_nodes, h_nodes, h_times, h_time_mask):
-        p_lambdas, n_lambdas = self.forward(s_nodes, t_nodes, t_times, n_nodes, h_nodes, h_times,
-                                            h_time_mask)
+    def bi_forward(self, s_nodes, t_nodes, n_nodes):
+        # the size of the current batch
+        batch = s_nodes.size()[0]
 
-        # the equation (10) in paper
+        # get the embedding by index
+        s_node_emb = self.node_emb.index_select(0, Variable(s_nodes.view(-1))).view(batch, -1)
+        t_node_emb = self.node_emb.index_select(0, Variable(t_nodes.view(-1))).view(batch, -1)
+
+        p_mu = ((s_node_emb - t_node_emb) ** 2).sum(dim=1).neg()
+
+        n_node_emb = self.node_emb.index_select(0, Variable(n_nodes.view(-1))).view(batch, self.neg_size, -1)
+        n_mu = ((s_node_emb.unsqueeze(1) - n_node_emb) ** 2).sum(dim=2).neg()
+        return p_mu, n_mu
+
+    def loss_func(self, s_nodes, t_nodes, t_times, n_nodes, h_nodes, h_times, h_time_mask):
+
+        if self.model_name == 'bi':
+            p_lambdas, n_lambdas = self.bi_forward(s_nodes, t_nodes, n_nodes)
+        else:
+            p_lambdas, n_lambdas = self.forward(s_nodes, t_nodes, t_times, n_nodes, h_nodes, h_times,
+                                                h_time_mask)
+
         loss = -torch.log(torch.sigmoid(p_lambdas) + 1e-6) - torch.log(
             torch.sigmoid(torch.neg(n_lambdas)) + 1e-6).sum(dim=1)
 
@@ -111,14 +145,14 @@ class HTNE_a:
                              str(self.loss.cpu().numpy() / len(self.data)) + '\n')
             sys.stdout.flush()
 
-        self.save_node_embeddings('dblp_htne_attn_%d.emb' % (self.epochs))
+        self.save_node_embeddings(self.save_file % (self.epochs))
 
-    def save_node_embeddings(self, path):
+    def save_node_embeddings(self, file):
         dir = './emb'
         if not os.path.exists(dir):
             os.makedirs(dir)
             print('create the dir...')
-        path = dir + '/' + path
+        path = dir + '/' + file
 
         embeddings = self.node_emb.data.numpy()
         writer = open(path, 'w')
@@ -128,5 +162,7 @@ class HTNE_a:
         writer.close()
 
 if __name__ == '__main__':
-    htne = HTNE_a('./dataset/dblp.txt')
-    htne.train()
+    # model_name = ['htne_attn', 'htne', 'bi']
+    # optim = ['SGD', 'Adam']
+    hp = HP(data_name='dblp', model_name='bi', optim='Adam')
+    hp.train()

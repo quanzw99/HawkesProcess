@@ -3,3 +3,5 @@
 .idea/
 test.py
 emb/
+dataset/*
+!dataset/dblp/
