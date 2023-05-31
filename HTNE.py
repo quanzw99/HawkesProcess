@@ -3,16 +3,18 @@ from HTNEDataSet import HTNEDataSet
 from torch.autograd import Variable
 from torch.nn.functional import softmax
 from torch.optim import SGD
+from torch.optim import Adam
 from torch.utils.data import DataLoader
 import numpy as np
 import sys
+import os
 
 FType = torch.FloatTensor
 LType = torch.LongTensor
 torch.set_num_threads(1)
 
 class HTNE_a:
-    def __init__(self, file_path, emb_size=128, neg_size=10, hist_len=2, directed=False,
+    def __init__(self, file_path, emb_size=128, neg_size=5, hist_len=5, directed=False,
                  learning_rate=0.01, batch_size=1000, save_step=50, epoch_num=20):
         self.emb_size = emb_size
         self.neg_size = neg_size
@@ -23,7 +25,9 @@ class HTNE_a:
         self.save_step = save_step
         self.epochs = epoch_num
 
+        print('start loading dataset...')
         self.data = HTNEDataSet(file_path, neg_size, hist_len, directed)
+        print('finish loading dataset...')
 
         # the number of the nodes
         self.node_dim = self.data.get_node_dim()
@@ -107,9 +111,15 @@ class HTNE_a:
                              str(self.loss.cpu().numpy() / len(self.data)) + '\n')
             sys.stdout.flush()
 
-        self.save_node_embeddings('./emb/dblp_htne_attn_%d.emb' % (self.epochs))
+        self.save_node_embeddings('dblp_htne_attn_%d.emb' % (self.epochs))
 
     def save_node_embeddings(self, path):
+        dir = './emb'
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+            print('create the dir...')
+        path = dir + '/' + path
+
         embeddings = self.node_emb.data.numpy()
         writer = open(path, 'w')
         writer.write('%d %d\n' % (self.node_dim, self.emb_size))
