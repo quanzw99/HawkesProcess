@@ -48,6 +48,6 @@ def node_classification(emb_file, i2l_file, test_size):
 
 
 if __name__ == '__main__':
-    micro_f1, macro_f1 = node_classification('./emb/dblp_bi_20.emb', './dataset/dblp/nid2label.txt', 0.2)
+    micro_f1, macro_f1 = node_classification('./emb/dblp_htne_20.emb', './dataset/dblp/nid2label.txt', 0.2)
     print("micro_f1: {:.5f}".format(micro_f1))
     print("macro_f1: {:.5f}".format(macro_f1))

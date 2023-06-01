@@ -67,7 +67,11 @@ class HP:
         t_node_emb = self.node_emb.index_select(0, Variable(t_nodes.view(-1))).view(batch, -1)
         h_node_emb = self.node_emb.index_select(0, Variable(h_nodes.view(-1))).view(batch, self.hist_len, -1)
 
-        att = softmax(((s_node_emb.unsqueeze(1) - h_node_emb) ** 2).sum(dim=2).neg(), dim=1)
+        if self.model_name == 'htne':
+            att = torch.ones((batch, self.hist_len))
+        elif self.model_name == 'htne_attn':
+            att = softmax(((s_node_emb.unsqueeze(1) - h_node_emb) ** 2).sum(dim=2).neg(), dim=1)
+
         p_mu = ((s_node_emb - t_node_emb) ** 2).sum(dim=1).neg()
         p_alpha = ((h_node_emb - t_node_emb.unsqueeze(1)) ** 2).sum(dim=2).neg()
 
@@ -102,7 +106,7 @@ class HP:
 
         if self.model_name == 'bi':
             p_lambdas, n_lambdas = self.bi_forward(s_nodes, t_nodes, n_nodes)
-        else:
+        elif self.model_name == 'htne' or self.model_name == 'htne_attn':
             p_lambdas, n_lambdas = self.forward(s_nodes, t_nodes, t_times, n_nodes, h_nodes, h_times,
                                                 h_time_mask)
 
@@ -164,5 +168,5 @@ class HP:
 if __name__ == '__main__':
     # model_name = ['htne_attn', 'htne', 'bi']
     # optim = ['SGD', 'Adam']
-    hp = HP(data_name='dblp', model_name='bi', optim='Adam')
+    hp = HP(data_name='dblp', model_name='htne_attn', optim='SGD')
     hp.train()
