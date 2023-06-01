@@ -61,6 +61,7 @@ class HawkesDataSet(Dataset):
         # generate idx2source_id and idx2target_id
         self.idx2source_id = np.zeros((self.data_size,), dtype=np.int32)
         self.idx2target_id = np.zeros((self.data_size,), dtype=np.int32)
+
         idx = 0
         for s_node in self.node2hist:
             for t_idx in range(len(self.node2hist[s_node])):

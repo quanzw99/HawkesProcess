@@ -63,9 +63,9 @@ class HP:
         batch = s_nodes.size()[0]
 
         # get the embedding by index
-        s_node_emb = self.node_emb.index_select(0, Variable(s_nodes.view(-1))).view(batch, -1)
-        t_node_emb = self.node_emb.index_select(0, Variable(t_nodes.view(-1))).view(batch, -1)
-        h_node_emb = self.node_emb.index_select(0, Variable(h_nodes.view(-1))).view(batch, self.hist_len, -1)
+        s_node_emb = self.node_emb[s_nodes.view(-1)].view(batch, -1)
+        t_node_emb = self.node_emb[t_nodes.view(-1)].view(batch, -1)
+        h_node_emb = self.node_emb[h_nodes.view(-1)].view(batch, self.hist_len, -1)
 
         if self.model_name == 'htne':
             att = torch.ones((batch, self.hist_len))
@@ -75,17 +75,17 @@ class HP:
         p_mu = ((s_node_emb - t_node_emb) ** 2).sum(dim=1).neg()
         p_alpha = ((h_node_emb - t_node_emb.unsqueeze(1)) ** 2).sum(dim=2).neg()
 
-        delta = self.delta.index_select(0, Variable(s_nodes.view(-1))).unsqueeze(1)
+        delta = self.delta[s_nodes.view(-1)].unsqueeze(1)
         d_time = torch.abs(t_times.unsqueeze(1) - h_times)  # (batch, hist_len)
-        p_lambda = p_mu + (att * p_alpha * torch.exp(delta * Variable(d_time)) * Variable(h_time_mask)).sum(dim=1)
+        p_lambda = p_mu + (att * p_alpha * torch.exp(delta * d_time) * h_time_mask).sum(dim=1)
 
-        n_node_emb = self.node_emb.index_select(0, Variable(n_nodes.view(-1))).view(batch, self.neg_size, -1)
+        n_node_emb = self.node_emb[n_nodes.view(-1)].view(batch, self.neg_size, -1)
 
         n_mu = ((s_node_emb.unsqueeze(1) - n_node_emb) ** 2).sum(dim=2).neg()
         n_alpha = ((h_node_emb.unsqueeze(2) - n_node_emb.unsqueeze(1)) ** 2).sum(dim=3).neg()
 
-        n_lambda = n_mu + (att.unsqueeze(2) * n_alpha * (torch.exp(delta * Variable(d_time)).unsqueeze(2)) * (
-            Variable(h_time_mask).unsqueeze(2))).sum(dim=1)
+        n_lambda = n_mu + (att.unsqueeze(2) * n_alpha * (torch.exp(delta * d_time).unsqueeze(2)) * (
+                h_time_mask.unsqueeze(2))).sum(dim=1)
         return p_lambda, n_lambda
 
     def bi_forward(self, s_nodes, t_nodes, n_nodes):
