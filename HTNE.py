@@ -21,7 +21,7 @@ class HP:
                  model_name='htne', optim='SGD'):
 
         file_path = self.get_dataset(data_name)['edges']
-        self.save_file = data_name + '_' + model_name + '_%d.emb'
+        self.save_file = data_name + '_' + model_name + '_' + optim +'_%d.emb'
         self.model_name = model_name
 
         self.emb_size = emb_size
@@ -93,12 +93,12 @@ class HP:
         batch = s_nodes.size()[0]
 
         # get the embedding by index
-        s_node_emb = self.node_emb.index_select(0, Variable(s_nodes.view(-1))).view(batch, -1)
-        t_node_emb = self.node_emb.index_select(0, Variable(t_nodes.view(-1))).view(batch, -1)
+        s_node_emb = self.node_emb[s_nodes.view(-1)].view(batch, -1)
+        t_node_emb = self.node_emb[t_nodes.view(-1)].view(batch, -1)
 
         p_mu = ((s_node_emb - t_node_emb) ** 2).sum(dim=1).neg()
 
-        n_node_emb = self.node_emb.index_select(0, Variable(n_nodes.view(-1))).view(batch, self.neg_size, -1)
+        n_node_emb = self.node_emb[n_nodes.view(-1)].view(batch, self.neg_size, -1)
         n_mu = ((s_node_emb.unsqueeze(1) - n_node_emb) ** 2).sum(dim=2).neg()
         return p_mu, n_mu
 
@@ -168,5 +168,5 @@ class HP:
 if __name__ == '__main__':
     # model_name = ['htne_attn', 'htne', 'bi']
     # optim = ['SGD', 'Adam']
-    hp = HP(data_name='dblp', model_name='htne_attn', optim='SGD')
+    hp = HP(data_name='dblp', model_name='bi', optim='Adam')
     hp.train()
