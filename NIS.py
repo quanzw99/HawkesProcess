@@ -17,7 +17,7 @@ torch.set_num_threads(1)
 
 class NIS:
     def __init__(self, data_name, emb_size=128, neg_size=5, hist_len=5, directed=False,
-                 learning_rate=0.01, batch_size=1000, save_step=50, epoch_num=20,
+                 learning_rate=0.001, batch_size=1000, save_step=50, epoch_num=20,
                  model_name='nis', optim='SGD'):
 
         file_path = self.get_dataset(data_name)['edges']
