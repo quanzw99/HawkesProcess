@@ -46,8 +46,26 @@ def node_classification(emb_file, i2l_file, test_size):
     macro_f1 = f1_score(Y_test, Y_pred, average='macro')
     return micro_f1, macro_f1
 
+def get_f1_scores(emb_file, i2l_file, test_size):
+    micro_f1_list = []
+    macro_f1_list = []
+
+    for _ in range(7):
+        micro_f1, macro_f1 = node_classification(emb_file, i2l_file, test_size)
+        micro_f1_list.append(micro_f1)
+        macro_f1_list.append(macro_f1)
+
+    # remove the max and the min
+    micro_f1_list.remove(max(micro_f1_list))
+    micro_f1_list.remove(min(micro_f1_list))
+    macro_f1_list.remove(max(macro_f1_list))
+    macro_f1_list.remove(min(macro_f1_list))
+
+    micro_mean = sum(micro_f1_list) / len(micro_f1_list)
+    macro_mean = sum(macro_f1_list) / len(macro_f1_list)
+    return micro_mean, macro_mean
 
 if __name__ == '__main__':
-    micro_f1, macro_f1 = node_classification('./emb/dblp_nis_Adam_20.emb', './dataset/dblp/nid2label.txt', 0.2)
+    micro_f1, macro_f1 = get_f1_scores('./emb/dblp_nis_Adam_20.emb', './dataset/dblp/nid2label.txt', 0.2)
     print("micro_f1: {:.5f}".format(micro_f1))
     print("macro_f1: {:.5f}".format(macro_f1))

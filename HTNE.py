@@ -35,6 +35,7 @@ class HP:
 
         print('start loading dataset...')
         self.data = HTNEDataSet(file_path, neg_size, hist_len, directed)
+        print('data len = ', len(self.data))
         print('finish loading dataset...')
 
         # the number of the nodes
@@ -168,5 +169,5 @@ class HP:
 if __name__ == '__main__':
     # model_name = ['htne_attn', 'htne', 'bi']
     # optim = ['SGD', 'Adam']
-    hp = HP(data_name='dblp', model_name='bi', optim='Adam')
+    hp = HP(data_name='dblp', model_name='htne', optim='SGD')
     hp.train()

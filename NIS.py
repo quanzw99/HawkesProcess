@@ -16,7 +16,7 @@ LType = torch.LongTensor
 torch.set_num_threads(1)
 
 class NIS:
-    def __init__(self, data_name, emb_size=128, neg_size=5, hist_len=5, directed=False,
+    def __init__(self, data_name, emb_size=128, neg_size=5, hist_len=2, directed=False,
                  learning_rate=0.001, batch_size=1000, save_step=50, epoch_num=20,
                  model_name='nis', optim='SGD'):
 
@@ -35,6 +35,7 @@ class NIS:
 
         print('start loading dataset...')
         self.data = NISDataSet(file_path, neg_size, hist_len, directed)
+        print('data len = ', len(self.data))
         print('finish loading dataset...')
 
         # the number of the nodes
@@ -184,5 +185,5 @@ class NIS:
 
 if __name__ == '__main__':
     # optim = ['SGD', 'Adam']
-    nis = NIS(data_name='dblp', optim='Adam')
+    nis = NIS(data_name='yelp', optim='Adam')
     nis.train()
