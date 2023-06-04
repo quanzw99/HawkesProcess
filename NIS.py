@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 import numpy as np
 import sys
 import os
+import datetime
 
 FType = torch.FloatTensor
 LType = torch.LongTensor
@@ -185,5 +186,9 @@ class NIS:
 
 if __name__ == '__main__':
     # optim = ['SGD', 'Adam']
+    start_time = datetime.datetime.now()
     nis = NIS(data_name='yelp', optim='Adam')
     nis.train()
+    end_time = datetime.datetime.now()
+    time_diff = end_time - start_time
+    print('time_diff = ', time_diff)

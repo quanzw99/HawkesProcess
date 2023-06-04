@@ -10,18 +10,21 @@ from torch.utils.data import DataLoader
 import numpy as np
 import sys
 import os
+import datetime
 
 FType = torch.FloatTensor
 LType = torch.LongTensor
 torch.set_num_threads(1)
+DID = 0
 
 class HP:
-    def __init__(self, data_name, emb_size=128, neg_size=5, hist_len=5, directed=False,
-                 learning_rate=0.01, batch_size=1000, save_step=50, epoch_num=20,
+    def __init__(self, data_name, emb_size=128, neg_size=5, hist_len=2, directed=False,
+                 learning_rate=0.01, batch_size=1000, save_step=50, epoch_num=16,
                  model_name='htne', optim='SGD'):
-
+        print('change1')
         file_path = self.get_dataset(data_name)['edges']
         self.save_file = data_name + '_' + model_name + '_' + optim +'_%d.emb'
+        print('save_file:', self.save_file % (epoch_num))
         self.model_name = model_name
 
         self.emb_size = emb_size
@@ -41,11 +44,19 @@ class HP:
         # the number of the nodes
         self.node_dim = self.data.get_node_dim()
 
-        self.node_emb = Variable(torch.from_numpy(np.random.uniform(
-            -1. / np.sqrt(self.node_dim), 1. / np.sqrt(self.node_dim), (self.node_dim, emb_size))).type(
-            FType), requires_grad=True)
+        if torch.cuda.is_available():
+            with torch.cuda.device(DID):
+                self.node_emb = Variable(torch.from_numpy(np.random.uniform(
+                    -1. / np.sqrt(self.node_dim), 1. / np.sqrt(self.node_dim), (self.node_dim, emb_size))).type(
+                    FType).cuda(), requires_grad=True)
 
-        self.delta = Variable((torch.zeros(self.node_dim) + 1.).type(FType), requires_grad=True)
+                self.delta = Variable((torch.zeros(self.node_dim) + 1.).type(FType).cuda(), requires_grad=True)
+        else:
+            self.node_emb = Variable(torch.from_numpy(np.random.uniform(
+                -1. / np.sqrt(self.node_dim), 1. / np.sqrt(self.node_dim), (self.node_dim, emb_size))).type(
+                FType), requires_grad=True)
+
+            self.delta = Variable((torch.zeros(self.node_dim) + 1.).type(FType), requires_grad=True)
 
         if optim == 'SGD':
             self.opt = SGD(lr=learning_rate, params=[self.node_emb, self.delta])
@@ -69,7 +80,7 @@ class HP:
         h_node_emb = self.node_emb[h_nodes.view(-1)].view(batch, self.hist_len, -1)
 
         if self.model_name == 'htne':
-            att = torch.ones((batch, self.hist_len))
+            att = torch.ones((batch, self.hist_len)).cuda()
         elif self.model_name == 'htne_attn':
             att = softmax(((s_node_emb.unsqueeze(1) - h_node_emb) ** 2).sum(dim=2).neg(), dim=1)
 
@@ -104,32 +115,51 @@ class HP:
         return p_mu, n_mu
 
     def loss_func(self, s_nodes, t_nodes, t_times, n_nodes, h_nodes, h_times, h_time_mask):
+        if torch.cuda.is_available():
+            with torch.cuda.device(DID):
+                if self.model_name == 'bi':
+                    p_lambdas, n_lambdas = self.bi_forward(s_nodes, t_nodes, n_nodes)
+                elif self.model_name == 'htne' or self.model_name == 'htne_attn':
+                    p_lambdas, n_lambdas = self.forward(s_nodes, t_nodes, t_times, n_nodes, h_nodes, h_times,
+                                                        h_time_mask)
 
-        if self.model_name == 'bi':
-            p_lambdas, n_lambdas = self.bi_forward(s_nodes, t_nodes, n_nodes)
-        elif self.model_name == 'htne' or self.model_name == 'htne_attn':
-            p_lambdas, n_lambdas = self.forward(s_nodes, t_nodes, t_times, n_nodes, h_nodes, h_times,
-                                                h_time_mask)
+                loss = -torch.log(p_lambdas.sigmoid() + 1e-6) - torch.log(
+                    n_lambdas.neg().sigmoid() + 1e-6).sum(dim=1)
+        else:
+            if self.model_name == 'bi':
+                p_lambdas, n_lambdas = self.bi_forward(s_nodes, t_nodes, n_nodes)
+            elif self.model_name == 'htne' or self.model_name == 'htne_attn':
+                p_lambdas, n_lambdas = self.forward(s_nodes, t_nodes, t_times, n_nodes, h_nodes, h_times,
+                                                    h_time_mask)
 
-        loss = -torch.log(torch.sigmoid(p_lambdas) + 1e-6) - torch.log(
-            torch.sigmoid(torch.neg(n_lambdas)) + 1e-6).sum(dim=1)
+            loss = -torch.log(torch.sigmoid(p_lambdas) + 1e-6) - torch.log(
+                torch.sigmoid(torch.neg(n_lambdas)) + 1e-6).sum(dim=1)
 
         return loss
 
     def update(self, s_nodes, t_nodes, t_times, n_nodes, h_nodes, h_times, h_time_mask):
-        self.opt.zero_grad()
-        loss = self.loss_func(s_nodes, t_nodes, t_times, n_nodes, h_nodes, h_times, h_time_mask)
-        loss = loss.sum()
-        self.loss += loss.data
-        loss.backward()
-        self.opt.step()
+        if torch.cuda.is_available():
+            with torch.cuda.device(DID):
+                self.opt.zero_grad()
+                loss = self.loss_func(s_nodes, t_nodes, t_times, n_nodes, h_nodes, h_times, h_time_mask)
+                loss = loss.sum()
+                self.loss += loss.data
+                loss.backward()
+                self.opt.step()
+        else:
+            self.opt.zero_grad()
+            loss = self.loss_func(s_nodes, t_nodes, t_times, n_nodes, h_nodes, h_times, h_time_mask)
+            loss = loss.sum()
+            self.loss += loss.data
+            loss.backward()
+            self.opt.step()
 
     def train(self):
         for epoch in range(self.epochs):
             # init loss at the beginning of each epoch
             self.loss = 0.0
             loader = DataLoader(self.data, batch_size=self.batch,
-                                shuffle=True, num_workers=5)
+                                shuffle=True, num_workers=2)
             for i_batch, sample_batched in enumerate(loader):
                 if i_batch % 100 == 0 and i_batch != 0:
                     sys.stdout.write('\r' + str(i_batch * self.batch) + '\tloss: ' + str(
@@ -137,13 +167,23 @@ class HP:
                         self.delta.mean().cpu().data.numpy()))
                     sys.stdout.flush()
 
-                self.update(sample_batched['source_node'].type(LType),
-                            sample_batched['target_node'].type(LType),
-                            sample_batched['target_time'].type(FType),
-                            sample_batched['neg_nodes'].type(LType),
-                            sample_batched['history_nodes'].type(LType),
-                            sample_batched['history_times'].type(FType),
-                            sample_batched['history_masks'].type(FType))
+                if torch.cuda.is_available():
+                    with torch.cuda.device(DID):
+                        self.update(sample_batched['source_node'].type(LType).cuda(),
+                                    sample_batched['target_node'].type(LType).cuda(),
+                                    sample_batched['target_time'].type(FType).cuda(),
+                                    sample_batched['neg_nodes'].type(LType).cuda(),
+                                    sample_batched['history_nodes'].type(LType).cuda(),
+                                    sample_batched['history_times'].type(FType).cuda(),
+                                    sample_batched['history_masks'].type(FType).cuda())
+                else:
+                    self.update(sample_batched['source_node'].type(LType),
+                                sample_batched['target_node'].type(LType),
+                                sample_batched['target_time'].type(FType),
+                                sample_batched['neg_nodes'].type(LType),
+                                sample_batched['history_nodes'].type(LType),
+                                sample_batched['history_times'].type(FType),
+                                sample_batched['history_masks'].type(FType))
 
             # print the avg loss for each epoch
             sys.stdout.write('\repoch ' + str(epoch) + ': avg loss = ' +
@@ -159,7 +199,7 @@ class HP:
             print('create the dir...')
         path = dir + '/' + file
 
-        embeddings = self.node_emb.data.numpy()
+        embeddings = self.node_emb.cpu().data.numpy()
         writer = open(path, 'w')
         writer.write('%d %d\n' % (self.node_dim, self.emb_size))
         for n_idx in range(self.node_dim):
@@ -169,5 +209,9 @@ class HP:
 if __name__ == '__main__':
     # model_name = ['htne_attn', 'htne', 'bi']
     # optim = ['SGD', 'Adam']
-    hp = HP(data_name='dblp', model_name='htne', optim='SGD')
+    start_time = datetime.datetime.now()
+    hp = HP(data_name='yelp', model_name='htne', optim='SGD')
     hp.train()
+    end_time = datetime.datetime.now()
+    time_diff = end_time - start_time
+    print('time_diff = ', time_diff)
