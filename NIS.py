@@ -15,14 +15,15 @@ import datetime
 FType = torch.FloatTensor
 LType = torch.LongTensor
 torch.set_num_threads(1)
+DID = 0
 
 class NIS:
     def __init__(self, data_name, emb_size=128, neg_size=5, hist_len=2, directed=False,
                  learning_rate=0.001, batch_size=1000, save_step=50, epoch_num=20,
                  model_name='nis', optim='SGD'):
-
         file_path = self.get_dataset(data_name)['edges']
         self.save_file = data_name + '_' + model_name + '_' + optim +'_%d.emb'
+        print('save_file:', self.save_file % (epoch_num))
         self.model_name = model_name
 
         self.emb_size = emb_size
@@ -42,11 +43,19 @@ class NIS:
         # the number of the nodes
         self.node_dim = self.data.get_node_dim()
 
-        self.node_emb = Variable(torch.from_numpy(np.random.uniform(
-            -1. / np.sqrt(self.node_dim), 1. / np.sqrt(self.node_dim), (self.node_dim, emb_size))).type(
-            FType), requires_grad=True)
+        if torch.cuda.is_available():
+            with torch.cuda.device(DID):
+                self.node_emb = Variable(torch.from_numpy(np.random.uniform(
+                    -1. / np.sqrt(self.node_dim), 1. / np.sqrt(self.node_dim), (self.node_dim, emb_size))).type(
+                    FType).cuda(), requires_grad=True)
 
-        self.delta1 = Variable((torch.tensor(1.0)).type(FType), requires_grad=True)
+                self.delta1 = Variable((torch.tensor(1.0)).type(FType).cuda(), requires_grad=True)
+        else:
+            self.node_emb = Variable(torch.from_numpy(np.random.uniform(
+                -1. / np.sqrt(self.node_dim), 1. / np.sqrt(self.node_dim), (self.node_dim, emb_size))).type(
+                FType), requires_grad=True)
+
+            self.delta1 = Variable((torch.tensor(1.0)).type(FType), requires_grad=True)
 
         if optim == 'SGD':
             self.opt = SGD(lr=learning_rate, params=[self.node_emb, self.delta1])
@@ -71,9 +80,9 @@ class NIS:
         s_h_node_emb = self.node_emb[s_h_nodes.view(-1)].view(batch, self.hist_len, -1)
         t_h_node_emb = self.node_emb[t_h_nodes.view(-1)].view(batch, self.hist_len, -1)
         n_h_node_emb = self.node_emb[n_h_nodes.view(-1)].view(batch, self.neg_size, self.hist_len, -1)
-
-        d1 = torch.sigmoid(self.delta1)
-        d2 = 1 - d1
+        
+        d1 = self.delta1.sigmoid()
+        d2 = 1. - d1
 
         # calculate p_mu
         p_mu = ((s_node_emb - t_node_emb) ** 2).sum(dim=1).neg()
@@ -117,51 +126,85 @@ class NIS:
                t_h_nodes, t_h_times, t_h_masks, n_h_nodes, n_h_times, n_h_masks):
 
         # calculate p_lambdas and n_lambdas
-        p_lambdas, n_lambdas = self.forward(s_nodes, t_nodes, t_times, n_nodes, s_h_nodes, s_h_times, s_h_masks,
-                                            t_h_nodes, t_h_times, t_h_masks, n_h_nodes, n_h_times, n_h_masks)
+        if torch.cuda.is_available():
+            with torch.cuda.device(DID):
+                p_lambdas, n_lambdas = self.forward(s_nodes, t_nodes, t_times, n_nodes, s_h_nodes, s_h_times, s_h_masks,
+                                                    t_h_nodes, t_h_times, t_h_masks, n_h_nodes, n_h_times, n_h_masks)
 
-        loss = -torch.log(torch.sigmoid(p_lambdas) + 1e-6) - torch.log(
-            torch.sigmoid(torch.neg(n_lambdas)) + 1e-6).sum(dim=1)
+                loss = -torch.log(p_lambdas.sigmoid() + 1e-6) - torch.log(
+                    n_lambdas.neg().sigmoid() + 1e-6).sum(dim=1)
+        else:
+            p_lambdas, n_lambdas = self.forward(s_nodes, t_nodes, t_times, n_nodes, s_h_nodes, s_h_times, s_h_masks,
+                                                t_h_nodes, t_h_times, t_h_masks, n_h_nodes, n_h_times, n_h_masks)
+
+            loss = -torch.log(torch.sigmoid(p_lambdas) + 1e-6) - torch.log(
+                torch.sigmoid(torch.neg(n_lambdas)) + 1e-6).sum(dim=1)
 
         return loss
 
     def update(self, s_nodes, t_nodes, t_times, n_nodes, s_h_nodes, s_h_times, s_h_masks,
                t_h_nodes, t_h_times, t_h_masks, n_h_nodes, n_h_times, n_h_masks):
-        self.opt.zero_grad()
-        loss = self.loss_func(s_nodes, t_nodes, t_times, n_nodes, s_h_nodes, s_h_times, s_h_masks,
-                              t_h_nodes, t_h_times, t_h_masks, n_h_nodes, n_h_times, n_h_masks)
-        loss = loss.sum()
-        self.loss += loss.data
-        loss.backward()
-        self.opt.step()
+        if torch.cuda.is_available():
+            with torch.cuda.device(DID):
+                self.opt.zero_grad()
+                loss = self.loss_func(s_nodes, t_nodes, t_times, n_nodes, s_h_nodes, s_h_times, s_h_masks,
+                                      t_h_nodes, t_h_times, t_h_masks, n_h_nodes, n_h_times, n_h_masks)
+                loss = loss.sum()
+                self.loss += loss.data
+                loss.backward()
+                self.opt.step()
+        else:
+            self.opt.zero_grad()
+            loss = self.loss_func(s_nodes, t_nodes, t_times, n_nodes, s_h_nodes, s_h_times, s_h_masks,
+                                  t_h_nodes, t_h_times, t_h_masks, n_h_nodes, n_h_times, n_h_masks)
+            loss = loss.sum()
+            self.loss += loss.data
+            loss.backward()
+            self.opt.step()
 
     def train(self):
         for epoch in range(self.epochs):
             # init loss at the beginning of each epoch
             self.loss = 0.0
             loader = DataLoader(self.data, batch_size=self.batch,
-                                shuffle=True, num_workers=5)
+                                shuffle=True, num_workers=4)
             for i_batch, sample_batched in enumerate(loader):
                 if i_batch % 100 == 0 and i_batch != 0:
-                    d1 = torch.sigmoid(self.delta1.data).data.numpy()
+                    d1 = self.delta1.sigmoid().cpu().data.numpy()
                     sys.stdout.write('\r' + str(i_batch * self.batch) + '\tloss: ' + str(
                         self.loss.cpu().numpy() / (self.batch * i_batch)) + '\tdelta1:' + str(
-                        d1) + '\tdelta2:' + str(1 - d1))
+                        d1) + '\tdelta2:' + str(1. - d1))
                     sys.stdout.flush()
 
-                self.update(sample_batched['source_node'].type(LType),
-                            sample_batched['target_node'].type(LType),
-                            sample_batched['target_time'].type(FType),
-                            sample_batched['neg_nodes'].type(LType),
-                            sample_batched['s_hist_nodes'].type(LType),
-                            sample_batched['s_hist_times'].type(FType),
-                            sample_batched['s_hist_masks'].type(FType),
-                            sample_batched['t_hist_nodes'].type(LType),
-                            sample_batched['t_hist_times'].type(FType),
-                            sample_batched['t_hist_masks'].type(FType),
-                            sample_batched['n_hists_nodes'].type(LType),
-                            sample_batched['n_hists_times'].type(FType),
-                            sample_batched['n_hists_masks'].type(FType))
+                if torch.cuda.is_available():
+                    with torch.cuda.device(DID):
+                        self.update(sample_batched['source_node'].type(LType).cuda(),
+                                    sample_batched['target_node'].type(LType).cuda(),
+                                    sample_batched['target_time'].type(FType).cuda(),
+                                    sample_batched['neg_nodes'].type(LType).cuda(),
+                                    sample_batched['s_hist_nodes'].type(LType).cuda(),
+                                    sample_batched['s_hist_times'].type(FType).cuda(),
+                                    sample_batched['s_hist_masks'].type(FType).cuda(),
+                                    sample_batched['t_hist_nodes'].type(LType).cuda(),
+                                    sample_batched['t_hist_times'].type(FType).cuda(),
+                                    sample_batched['t_hist_masks'].type(FType).cuda(),
+                                    sample_batched['n_hists_nodes'].type(LType).cuda(),
+                                    sample_batched['n_hists_times'].type(FType).cuda(),
+                                    sample_batched['n_hists_masks'].type(FType).cuda())
+                else:
+                    self.update(sample_batched['source_node'].type(LType),
+                                sample_batched['target_node'].type(LType),
+                                sample_batched['target_time'].type(FType),
+                                sample_batched['neg_nodes'].type(LType),
+                                sample_batched['s_hist_nodes'].type(LType),
+                                sample_batched['s_hist_times'].type(FType),
+                                sample_batched['s_hist_masks'].type(FType),
+                                sample_batched['t_hist_nodes'].type(LType),
+                                sample_batched['t_hist_times'].type(FType),
+                                sample_batched['t_hist_masks'].type(FType),
+                                sample_batched['n_hists_nodes'].type(LType),
+                                sample_batched['n_hists_times'].type(FType),
+                                sample_batched['n_hists_masks'].type(FType))
 
             # print the avg loss for each epoch
             sys.stdout.write('\repoch ' + str(epoch) + ': avg loss = ' +
@@ -177,7 +220,7 @@ class NIS:
             print('create the dir...')
         path = dir + '/' + file
 
-        embeddings = self.node_emb.data.numpy()
+        embeddings = self.node_emb.cpu().data.numpy()
         writer = open(path, 'w')
         writer.write('%d %d\n' % (self.node_dim, self.emb_size))
         for n_idx in range(self.node_dim):
@@ -187,7 +230,7 @@ class NIS:
 if __name__ == '__main__':
     # optim = ['SGD', 'Adam']
     start_time = datetime.datetime.now()
-    nis = NIS(data_name='yelp', optim='Adam')
+    nis = NIS(data_name='tmall', optim='Adam')
     nis.train()
     end_time = datetime.datetime.now()
     time_diff = end_time - start_time

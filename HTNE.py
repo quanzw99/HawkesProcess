@@ -18,10 +18,9 @@ torch.set_num_threads(1)
 DID = 0
 
 class HP:
-    def __init__(self, data_name, emb_size=128, neg_size=5, hist_len=2, directed=False,
-                 learning_rate=0.01, batch_size=1000, save_step=50, epoch_num=16,
+    def __init__(self, data_name, emb_size=128, neg_size=5, hist_len=5, directed=False,
+                 learning_rate=0.01, batch_size=1000, save_step=50, epoch_num=20,
                  model_name='htne', optim='SGD'):
-        print('change1')
         file_path = self.get_dataset(data_name)['edges']
         self.save_file = data_name + '_' + model_name + '_' + optim +'_%d.emb'
         print('save_file:', self.save_file % (epoch_num))
@@ -210,7 +209,7 @@ if __name__ == '__main__':
     # model_name = ['htne_attn', 'htne', 'bi']
     # optim = ['SGD', 'Adam']
     start_time = datetime.datetime.now()
-    hp = HP(data_name='yelp', model_name='htne', optim='SGD')
+    hp = HP(data_name='dblp', model_name='htne_attn', optim='SGD')
     hp.train()
     end_time = datetime.datetime.now()
     time_diff = end_time - start_time

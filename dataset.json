@@ -3,8 +3,8 @@
     "edges"  : "./dataset/dblp/dblp.txt",
     "labels" : "./dataset/dblp/nid2label.txt"
   },
-  "yelp": {
-    "edges"  : "./dataset/yelp/yelp.txt",
-    "labels" : "./dataset/yelp/node2label.txt"
+    "tmall": {
+    "edges"  : "./dataset/tmall/tmall.txt",
+    "labels" : "./dataset/tmall/node2label.txt"
   }
 }
