@@ -19,8 +19,9 @@ DID = 0
 
 class NIS:
     def __init__(self, data_name, emb_size=128, neg_size=5, hist_len=2, directed=False,
-                 learning_rate=0.001, batch_size=1000, save_step=50, epoch_num=20,
+                 learning_rate=0.0005, batch_size=1000, save_step=2, epoch_num=20,
                  model_name='nis', optim='SGD'):
+        print('change1')
         file_path = self.get_dataset(data_name)['edges']
         self.save_file = data_name + '_' + model_name + '_' + optim +'_%d.emb'
         print('save_file:', self.save_file % (epoch_num))
@@ -168,6 +169,8 @@ class NIS:
             self.loss = 0.0
             loader = DataLoader(self.data, batch_size=self.batch,
                                 shuffle=True, num_workers=4)
+            if epoch % self.save_step == 0 and epoch != 0:
+                self.save_node_embeddings(self.save_file % (epoch))
             for i_batch, sample_batched in enumerate(loader):
                 if i_batch % 100 == 0 and i_batch != 0:
                     d1 = self.delta1.sigmoid().cpu().data.numpy()

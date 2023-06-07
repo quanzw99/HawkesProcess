@@ -18,11 +18,12 @@ torch.set_num_threads(1)
 DID = 0
 
 class HP:
-    def __init__(self, data_name, emb_size=128, neg_size=5, hist_len=5, directed=False,
-                 learning_rate=0.01, batch_size=1000, save_step=50, epoch_num=20,
+    def __init__(self, data_name, emb_size=128, neg_size=5, hist_len=2, directed=False,
+                 learning_rate=0.01, batch_size=1000, save_step=8, epoch_num=160,
                  model_name='htne', optim='SGD'):
+        print('change1')
         file_path = self.get_dataset(data_name)['edges']
-        self.save_file = data_name + '_' + model_name + '_' + optim +'_%d.emb'
+        self.save_file = data_name + '_' + model_name + '_' + optim +'_%d_v7.emb'
         print('save_file:', self.save_file % (epoch_num))
         self.model_name = model_name
 
@@ -158,7 +159,9 @@ class HP:
             # init loss at the beginning of each epoch
             self.loss = 0.0
             loader = DataLoader(self.data, batch_size=self.batch,
-                                shuffle=True, num_workers=2)
+                                shuffle=True, num_workers=4)
+            if epoch % self.save_step == 0 and epoch != 0:
+                self.save_node_embeddings(self.save_file % (epoch))
             for i_batch, sample_batched in enumerate(loader):
                 if i_batch % 100 == 0 and i_batch != 0:
                     sys.stdout.write('\r' + str(i_batch * self.batch) + '\tloss: ' + str(
@@ -209,7 +212,7 @@ if __name__ == '__main__':
     # model_name = ['htne_attn', 'htne', 'bi']
     # optim = ['SGD', 'Adam']
     start_time = datetime.datetime.now()
-    hp = HP(data_name='dblp', model_name='htne_attn', optim='SGD')
+    hp = HP(data_name='tmall', model_name='bi', optim='Adam')
     hp.train()
     end_time = datetime.datetime.now()
     time_diff = end_time - start_time

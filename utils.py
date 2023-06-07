@@ -50,7 +50,7 @@ def get_f1_scores(emb_file, i2l_file, test_size):
     micro_f1_list = []
     macro_f1_list = []
 
-    for _ in range(7):
+    for _ in range(12):
         micro_f1, macro_f1 = node_classification(emb_file, i2l_file, test_size)
         micro_f1_list.append(micro_f1)
         macro_f1_list.append(macro_f1)
@@ -66,6 +66,6 @@ def get_f1_scores(emb_file, i2l_file, test_size):
     return micro_mean, macro_mean
 
 if __name__ == '__main__':
-    micro_f1, macro_f1 = get_f1_scores('./emb/dblp_nis_Adam_20.emb', './dataset/dblp/nid2label.txt', 0.2)
+    micro_f1, macro_f1 = get_f1_scores('./emb/tmall_htne_SGD_80_v4.emb', './dataset/tmall/node2label.txt', 0.2)
     print("micro_f1: {:.5f}".format(micro_f1))
     print("macro_f1: {:.5f}".format(macro_f1))
