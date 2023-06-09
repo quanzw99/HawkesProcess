@@ -18,12 +18,11 @@ torch.set_num_threads(1)
 DID = 0
 
 class NIS:
-    def __init__(self, data_name, emb_size=128, neg_size=5, hist_len=2, directed=False,
-                 learning_rate=0.0005, batch_size=1000, save_step=2, epoch_num=20,
+    def __init__(self, data_name, emb_size=128, neg_size=5, hist_len=5, directed=False,
+                 learning_rate=0.001, batch_size=1000, save_step=10, epoch_num=80,
                  model_name='nis', optim='SGD'):
-        print('change1')
         file_path = self.get_dataset(data_name)['edges']
-        self.save_file = data_name + '_' + model_name + '_' + optim +'_%d.emb'
+        self.save_file = data_name + '_' + model_name + '_' + optim +'_%d_h1.emb'
         print('save_file:', self.save_file % (epoch_num))
         self.model_name = model_name
 
@@ -233,7 +232,7 @@ class NIS:
 if __name__ == '__main__':
     # optim = ['SGD', 'Adam']
     start_time = datetime.datetime.now()
-    nis = NIS(data_name='tmall', optim='Adam')
+    nis = NIS(data_name='dblp', optim='Adam')
     nis.train()
     end_time = datetime.datetime.now()
     time_diff = end_time - start_time
